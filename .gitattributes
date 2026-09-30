@@ -1,0 +1,2 @@
+# Store every file byte-for-byte: .cmd needs CRLF, .ps1 needs its BOM.
+* -text

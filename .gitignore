@@ -1,0 +1,4 @@
+# written by the kit on each machine - never commit
+creds.dat
+*.log
+ipv6-off.txt

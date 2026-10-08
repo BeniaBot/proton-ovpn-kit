@@ -61,6 +61,8 @@ Disable-Ipv6
 
 Write-Host 'Connecting... (this window must stay open while you work)'
 Write-Host ''
+$MgmtPort = Find-FreePort
+Set-Content $PortFile $MgmtPort -Encoding ASCII
 $ovpnArgs = @('--config', $Config, '--windows-driver', 'tap-windows6',
           '--management', '127.0.0.1', "$MgmtPort", '--management-hold', '--management-query-passwords',
           '--auth-retry', 'none', '--auth-nocache', '--verb', '3')
@@ -140,6 +142,7 @@ Show-Msg ("מחוברים ל-VPN.`n`n" +
     "כדי להתנתק: לחיצה כפולה על 3-disconnect.cmd") | Out-Null
 
 $proc.WaitForExit()
+Remove-Item $PortFile -Force -ErrorAction SilentlyContinue
 Restore-Ipv6
 Write-Host 'Disconnected.'
 Start-Sleep -Seconds 3

@@ -2,3 +2,4 @@
 creds.dat
 *.log
 ipv6-off.txt
+mgmt-port.txt

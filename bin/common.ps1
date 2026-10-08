@@ -9,7 +9,7 @@ $CredFile  = Join-Path $Bin 'creds.dat'        # DPAPI-encrypted, readable only 
 $Ipv6File  = Join-Path $Bin 'ipv6-off.txt'     # adapters whose IPv6 we switched off
 $OpenVpn   = Join-Path $Bin 'openvpn.exe'
 $Config    = 'best.ovpn'                        # relative to $Bin (openvpn runs with $Bin as working dir)
-$MgmtPort  = 7505
+$PortFile  = Join-Path $Bin 'mgmt-port.txt'    # management port of the running OpenVPN
 $AccountUrl = 'https://account.proton.me/vpn/OpenVpn'
 
 # Our own small dialog instead of MessageBox: on this Windows the stock message box
@@ -48,8 +48,31 @@ function Show-Msg([string]$Text, [string]$Icon = 'Information', [string]$Buttons
     $f.Dispose()
     $script:MsgResult
 }
+# OpenVPN's local management port. Not a fixed number: Windows (Hyper-V, WSL, Docker)
+# reserves blocks of ports that move around after each restart, and a reserved port
+# cannot be opened at all, so OpenVPN came up without its port and the kit gave up.
+# Each connect picks a port that is free right now and saves it for disconnect.
+function Find-FreePort {
+    foreach ($p in 7505, 0) {   # 0 = let Windows pick one outside its reserved blocks
+        try {
+            $l = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, $p)
+            $l.Start(); $port = $l.LocalEndpoint.Port; $l.Stop()
+            return $port
+        } catch { }
+    }
+    throw 'no free local port for the OpenVPN management interface'
+}
+
+function Get-MgmtPort {
+    if (Test-Path $PortFile) { [int](Get-Content $PortFile -Raw).Trim() } else { 0 }
+}
+
 function Test-VpnRunning {
-    [bool](Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort $MgmtPort -State Listen -ErrorAction SilentlyContinue)
+    $port = Get-MgmtPort
+    if (-not $port) { return $false }
+    # the saved port may be stale (window closed with X) and since reused by another program
+    [bool](Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+        Where-Object { (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).Name -eq 'openvpn' })
 }
 
 # The tunnel carries IPv4 only, so while it is up IPv6 would go around it.
@@ -74,7 +97,7 @@ function Restore-Ipv6 {
 
 function Send-VpnStop {
     try {
-        $c = New-Object Net.Sockets.TcpClient('127.0.0.1', $MgmtPort)
+        $c = New-Object Net.Sockets.TcpClient('127.0.0.1', (Get-MgmtPort))
         $w = New-Object IO.StreamWriter($c.GetStream()); $w.NewLine = "`n"
         $w.WriteLine('signal SIGTERM'); $w.Flush()
         Start-Sleep -Milliseconds 500; $c.Close(); $true

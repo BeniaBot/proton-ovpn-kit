@@ -170,16 +170,17 @@ function Read-VpnLine([string]$line) {
             return $false
         }
     }
-    elseif ($line -match '^>STATE:\d+,CONNECTED,(?!SUCCESS)') {
-        # Connected, but Windows refused the routes (CONNECTED,ROUTE_ERROR) - the browsing
-        # may not go through the tunnel at all. Seen on a real country switch. Start over
-        # cleanly, twice at most.
+    elseif ($line -match '^>STATE:\d+,CONNECTED,(?!SUCCESS)' -and -not (Test-TunnelRoutes)) {
+        # Connected, but Windows refused routes (CONNECTED,ROUTE_ERROR) and the IPv4 ones are
+        # not all there - the browsing may go around the tunnel. Start over cleanly, twice at
+        # most. (When the IPv4 routes are in place, the error was elsewhere: see below.)
         $S.RouteFails++
         Write-Host "$(Get-Date -Format 'HH:mm:ss') Connected with an error ($line) - attempt $($S.RouteFails)"
         if ($S.RouteFails -le 2) { Request-Stop 'retry' $S.Country }
         else { $S.Outcome = 'route'; Stop-Process -Id $S.Proc.Id -Force -ErrorAction SilentlyContinue; return $false }
     }
-    elseif ($line -match '^>STATE:\d+,CONNECTED,SUCCESS') {
+    elseif ($line -match '^>STATE:\d+,CONNECTED,') {
+        if ($line -notmatch ',CONNECTED,SUCCESS') { Write-Host "$(Get-Date -Format 'HH:mm:ss') Note: $line - but all IPv4 goes through the tunnel" }
         if ($S.Phase -eq 'connecting') {
             $S.Phase = 'up'; $S.UpSince = Get-Date
             Set-Content $ConnectedFile $S.Country.Code -Encoding ASCII

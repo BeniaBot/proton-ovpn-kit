@@ -132,6 +132,15 @@ function Clear-TunnelRoutes {
     } | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
 }
 
+# True when all IPv4 goes through the tunnel: both halves of the default route sit on
+# the VPN adapter. A route error elsewhere (IPv6) does not matter then.
+function Test-TunnelRoutes {
+    $tap = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object InterfaceDescription -like 'TAP-ProtonVPN*' | Select-Object -First 1
+    if (-not $tap) { return $false }
+    $have = @(Get-NetRoute -AddressFamily IPv4 -InterfaceIndex $tap.ifIndex -ErrorAction SilentlyContinue | ForEach-Object DestinationPrefix)
+    ('0.0.0.0/1' -in $have) -and ('128.0.0.0/1' -in $have)
+}
+
 # The tunnel carries IPv4 only, so while it is up IPv6 would go around it.
 # Switch IPv6 off on the physical adapters and remember which ones we touched.
 function Disable-Ipv6 {

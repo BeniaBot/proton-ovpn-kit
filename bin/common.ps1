@@ -120,6 +120,18 @@ function Start-KitButton([string]$Name) {
     Start-Process explorer.exe -ArgumentList ('"' + (Join-Path $Kit $Name) + '"')
 }
 
+# Routes OpenVPN leaves behind when it is killed instead of stopped: the two halves of
+# the default route on the VPN adapter, and the host routes to the servers. Left there,
+# the next connection could not add its own ("route addition failed", seen in a real
+# switch on 10.10.2026). Needs admin; without it this quietly does nothing.
+function Clear-TunnelRoutes {
+    $tap = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object InterfaceDescription -like 'TAP-ProtonVPN*' | Select-Object -First 1
+    $servers = @(Get-Countries | ForEach-Object { $_.Servers }) | ForEach-Object { "$_/32" }
+    Get-NetRoute -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {
+        ($tap -and $_.ifIndex -eq $tap.ifIndex -and $_.DestinationPrefix -in '0.0.0.0/1', '128.0.0.0/1') -or $_.DestinationPrefix -in $servers
+    } | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+}
+
 # The tunnel carries IPv4 only, so while it is up IPv6 would go around it.
 # Switch IPv6 off on the physical adapters and remember which ones we touched.
 function Disable-Ipv6 {

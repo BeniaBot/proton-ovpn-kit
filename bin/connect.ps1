@@ -25,9 +25,10 @@ function Save-OpenVpnLog {
 # Leaves the computer as it was: OpenVPN gone, IPv6 back on, no state files.
 function Complete-Vpn {
     if ($S.Client) { try { $S.Client.Close() } catch { } }
-    if ($S.Proc -and -not $S.Proc.HasExited) { Stop-Process -Id $S.Proc.Id -Force -ErrorAction SilentlyContinue }
+    if ($S.Proc -and -not $S.Proc.HasExited) { Stop-Process -Id $S.Proc.Id -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500 }
     Save-OpenVpnLog
     Remove-Item $ConnectedFile, $StopFile -Force -ErrorAction SilentlyContinue
+    Clear-TunnelRoutes    # what a killed OpenVPN could not remove itself
     Restore-Ipv6
 }
 
@@ -109,6 +110,7 @@ function Start-Vpn {
               '--management', '127.0.0.1', "$port", '--management-hold', '--management-query-passwords',
               '--auth-retry', 'none', '--auth-nocache', '--verb', '3',
               '--log', 'openvpn-run.log') + (Get-RemoteArgs $c)   # its own full log, kept even if the management line drops
+    Clear-TunnelRoutes    # leftovers of a killed run would make this one's routes fail
     # no stale AUTH_FAILED from an earlier run, should this one die before opening its log
     Remove-Item (Join-Path $Bin 'openvpn-run.log') -Force -ErrorAction SilentlyContinue
     $S.Proc = Start-Process $OpenVpn -ArgumentList $ovpnArgs -WorkingDirectory $Bin -NoNewWindow -PassThru
@@ -144,7 +146,7 @@ function Request-Stop([string]$Why, $Next = $null) {
         $S.Queue.Clear(); $S.Queue.Enqueue('signal SIGTERM'); $S.Waiting = $false
         $S.KillAt = (Get-Date).AddSeconds(8)     # in case OpenVPN does not answer
     }
-    Set-View $(if ($Why -eq 'switch') { 'switching' } else { 'stopping' })
+    Set-View @{ switch = 'switching'; retry = 'retrying'; user = 'stopping' }[$Why]
 }
 
 $quote = { param($v) '"' + (($v -replace '\\', '\\') -replace '"', '\"') + '"' }
@@ -167,6 +169,15 @@ function Read-VpnLine([string]$line) {
             $S.Outcome = 'auth'; Stop-Process -Id $S.Proc.Id -Force -ErrorAction SilentlyContinue
             return $false
         }
+    }
+    elseif ($line -match '^>STATE:\d+,CONNECTED,(?!SUCCESS)') {
+        # Connected, but Windows refused the routes (CONNECTED,ROUTE_ERROR) - the browsing
+        # may not go through the tunnel at all. Seen on a real country switch. Start over
+        # cleanly, twice at most.
+        $S.RouteFails++
+        Write-Host "$(Get-Date -Format 'HH:mm:ss') Connected with an error ($line) - attempt $($S.RouteFails)"
+        if ($S.RouteFails -le 2) { Request-Stop 'retry' $S.Country }
+        else { $S.Outcome = 'route'; Stop-Process -Id $S.Proc.Id -Force -ErrorAction SilentlyContinue; return $false }
     }
     elseif ($line -match '^>STATE:\d+,CONNECTED,SUCCESS') {
         if ($S.Phase -eq 'connecting') {
@@ -195,9 +206,10 @@ function Complete-Run {
     $S.Client = $null
     Save-OpenVpnLog
     Remove-Item $ConnectedFile -Force -ErrorAction SilentlyContinue
-    if ($S.Stopping -eq 'switch') {
+    if ($S.Stopping -in 'switch', 'retry') {
+        if ($S.Stopping -eq 'switch') { $S.RouteFails = 0 }
         $S.Country = $S.Next; $S.Phase = 'idle'; $S.Stopping = $null
-        Set-View 'connecting'
+        $S.NotBefore = (Get-Date).AddSeconds(3)   # let Windows settle the adapter (a quick restart got route errors)
         return $true
     }
     # OpenVPN says "verification failed" and exits at once; that last line can be lost with
@@ -211,7 +223,8 @@ function Complete-Run {
 function Step-Vpn {
     if ($S.Phase -eq 'idle') {
         if ($S.Stopping) { $S.Outcome = 'stopped'; return $false }
-        Set-View 'connecting'
+        if ($S.NotBefore -and (Get-Date) -lt $S.NotBefore) { return $true }
+        if ($S.View -ne 'retrying') { Set-View 'connecting' }
         if (-not $S.Prepared) {
             if (-not (Initialize-Network)) { return $false }
             $S.Prepared = $true
@@ -262,6 +275,7 @@ function Get-ViewText([string]$Kind) {
         'back'       { @('מחובר', 'green', 'החיבור חזר.') }
         'dropped'    { @('החיבור נפל', 'red', "מנסה להתחבר מחדש.`nעד שיחזור - לא לשלוח ולא להעלות דברים רגישים.") }
         'switching'  { @("עובר ל$($S.Next.Name)...", 'amber', '') }
+        'retrying'   { @('מתחבר שוב...', 'amber', 'הניסיון הקודם לא הושלם עד הסוף. מנסה שוב.') }
         'stopping'   { @('מתנתק...', 'gray', '') }
         'stopped'    { @('נותק', 'gray', 'הגלישה חזרה להיות רגילה.') }
     }
@@ -306,7 +320,7 @@ function Set-ViewWpf([string]$Kind, $v) {
         $a.AutoReverse = $true; $a.RepeatBehavior = [Windows.Media.Animation.RepeatBehavior]::Forever
         $e.Dot.BeginAnimation([Windows.UIElement]::OpacityProperty, $a)
     }
-    $busy = $Kind -in 'stopping', 'switching', 'stopped'
+    $busy = $Kind -in 'stopping', 'switching', 'retrying', 'stopped'
     $e.StopBtn.IsEnabled = -not $busy; $e.SwitchBtn.IsEnabled = -not $busy
     switch ($Kind) {
         'connected' { $w.Topmost = $false }
@@ -386,7 +400,7 @@ function Set-ViewClassic([string]$Kind, $v) {
                             red = [Drawing.Color]::FromArgb(204, 42, 54); gray = [Drawing.Color]::FromArgb(100, 107, 118) }[$v[1]]
     $e.Detail.Text = $v[2]
     $S.W.Text = "Proton VPN · $($S.Country.Name)"
-    $busy = $Kind -in 'stopping', 'switching', 'stopped'
+    $busy = $Kind -in 'stopping', 'switching', 'retrying', 'stopped'
     $e.StopBtn.Enabled = -not $busy; $e.SwitchBtn.Enabled = -not $busy
     switch ($Kind) {
         'connected' { $S.W.TopMost = $false }
@@ -479,6 +493,7 @@ switch ($S.Outcome) {
                     "(אלה הפרטים מעמוד OpenVPN - לא הסיסמה הרגילה של החשבון.)") }
     'timeout' { Fail "החיבור ל$name לא הצליח תוך שתי דקות וחצי. בדקו שיש אינטרנט ונסו שוב." }
     'nostart' { Fail "תוכנת ה-VPN לא עלתה. נסו שוב." }
+    'route'   { Fail "החיבור ל$name עלה, אבל ווינדוס לא הסכימה להעביר דרכו את הגלישה, גם אחרי כמה ניסיונות.`n`nנסו להפעיל מחדש את המחשב ולהתחבר שוב." }
     'tap'     { Fail "התקנת רכיב הרשת לא הצליחה. נסו שוב, ואם זה חוזר - הפעילו מחדש את המחשב ונסו שוב." }
     'exited'  { Fail "תוכנת ה-VPN נסגרה לפני שהתחברה. נסו שוב." }
     'lost'    {

@@ -38,6 +38,9 @@ foreach ($l in $lines) {
     Check "flag exists: $($p[0])" (Test-Path "$Repo\bin\flags\$($p[0].ToLower()).png")
     $codes += $p[0]
 }
+$base = Get-Content "$Repo\bin\base.ovpn" -Raw
+Check 'base.ovpn: no fixed servers (they come from countries.txt)' ($base -notmatch '(?m)^remote ')
+Check 'base.ovpn: IPv4-only routing (US servers push IPv6 routes Windows refuses)' ($base -match '(?m)^pull-filter ignore "redirect-gateway"' -and $base -match '(?m)^redirect-gateway def1' -and $base -match '(?m)^pull-filter ignore "route-ipv6"')
 Check 'countries.txt: codes unique' (($codes | Sort-Object -Unique).Count -eq $codes.Count)
 Check 'countries.txt: default is NL with the proven server first' ($lines[0] -like 'NL|*|190.2.149.6 *')
 

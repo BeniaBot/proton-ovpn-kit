@@ -3,3 +3,6 @@ creds.dat
 *.log
 ipv6-off.txt
 mgmt-port.txt
+country.txt
+connected.txt
+stop-request

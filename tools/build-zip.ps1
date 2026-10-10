@@ -1,4 +1,4 @@
-# Builds proton-ovpn-kit.zip for the release: the kit files only (no tests, no tools,
+﻿# Builds proton-ovpn-kit.zip for the release: the kit files only (no tests, no tools,
 # no repo files), under one top folder "proton-ovpn-kit", like every release so far.
 # Anything a test run or a real run leaves in bin (credentials, logs, state) stays out.
 param([string]$Out = (Join-Path (Split-Path -Parent $PSScriptRoot) 'proton-ovpn-kit.zip'))

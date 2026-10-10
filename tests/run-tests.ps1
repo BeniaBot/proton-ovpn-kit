@@ -140,7 +140,7 @@ function Join-Env([hashtable]$a, [hashtable]$b) { $r = @{}; foreach ($h in $a, $
 
 function Start-Connect([string]$Scenario, [hashtable]$Env = @{}, [switch]$KeepState) {
     if (-not $KeepState) { Reset-Kit }
-    Remove-Item -LiteralPath $Transcript, $FakeLog -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $Transcript, $FakeLog, "$FakeLog.count" -ErrorAction SilentlyContinue
     $vars = @{ FAKE_SCENARIO = $Scenario; FAKE_LOG = $FakeLog; PROTON_KIT_TEST_CLOSE = '2'; PROTON_KIT_CONNECT_TIMEOUT = '8'; PROTON_KIT_CLASSIC = $null; PROTON_KIT_TEST_ANSWER = $null }
     foreach ($k in $Env.Keys) { $vars[$k] = $Env[$k] }   # (hashtable + hashtable throws on a repeated key)
     foreach ($k in $vars.Keys) { Set-Item "env:$k" $vars[$k] -ErrorAction SilentlyContinue; if ($null -eq $vars[$k]) { Remove-Item "env:$k" -ErrorAction SilentlyContinue } }
@@ -199,6 +199,14 @@ foreach ($mode in 'wpf', 'classic') {
     $p = Start-Connect 'hang' (Join-Env $envMode @{ PROTON_KIT_CONNECT_TIMEOUT = '60' })
     Wait-For { Has 'Connecting to' } 30 | Out-Null; Start-Sleep 2; Stop-Kit
     Check "${m}stop while connecting: quick and quiet" ($p.WaitForExit(15000) -and -not (Has '\[message Error\]')) (Read-Text $Transcript)
+
+    # connected, but Windows refused the routes (seen for real on a switch): start over cleanly
+    $p = Start-Connect 'routeerr' $envMode
+    Check "${m}route error: retries and connects" ((Wait-For { (Has 'Connected with an error') -and (Has '\[window\] connected') } 50) -and -not $p.HasExited) (Read-Text $Transcript)
+    Stop-Kit; Check "${m}route error: then disconnects" ($p.WaitForExit(15000))
+    $p = Start-Connect 'routeerr-always' $envMode
+    Check "${m}route error every time: gives up after 3 tries and explains" ($p.WaitForExit(90000) -and (Has 'ווינדוס לא הסכימה') -and ([regex]::Matches((Read-Text $Transcript), 'Connected with an error')).Count -eq 3) (Read-Text $Transcript)
+    Check "${m}route error every time: leaves nothing behind" (Test-Clean)
 
     # switch country while connected (what 4-choose-country does)
     $p = Start-Connect 'ok' $envMode

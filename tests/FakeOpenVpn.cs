@@ -7,6 +7,8 @@
 //   crash     connect, then exit without a word after 3 s
 //   early     exit right after the hold is released (never connects)
 //   hang      never connect (for the timeout)
+//   routeerr  CONNECTED,ROUTE_ERROR on the first launch, then clean (launches counted in FAKE_LOG.count)
+//   routeerr-always  CONNECTED,ROUTE_ERROR every time
 // FAKE_LOG gets the remotes it was given and the credentials it received.
 using System;
 using System.IO;
@@ -78,7 +80,14 @@ class FakeOpenVpn {
                 }
                 if (scenario == "hang") continue;
                 Say(">LOG:" + Now() + ",I,Peer Connection Initiated with [AF_INET]1.2.3.4:1194");
-                Say(">STATE:" + Now() + ",CONNECTED,SUCCESS,10.96.0.3,1.2.3.4,1194,,");
+                string status = "SUCCESS";
+                if (scenario.StartsWith("routeerr")) {
+                    string counter = logPath + ".count";
+                    int launches = File.Exists(counter) ? int.Parse(File.ReadAllText(counter)) : 0;
+                    File.WriteAllText(counter, (launches + 1).ToString());
+                    if (scenario == "routeerr-always" || launches == 0) status = "ROUTE_ERROR";
+                }
+                Say(">STATE:" + Now() + ",CONNECTED," + status + ",10.96.0.3,1.2.3.4,1194,,");
                 if (scenario == "drop" && creds == 1) Later(3000, () => {
                     Say(">STATE:" + Now() + ",RECONNECTING,ping-restart,,,,,");
                     Say(">PASSWORD:Need 'Auth' username/password");

@@ -18,7 +18,7 @@ $r = Show-Msg ("הגדרה ראשונה - פעם אחת בלבד.`n`n" +
     "אם צריך - התחברו לחשבון Proton שלכם.`n`n" +
     "אחרי שהעמוד נפתח ורואים בו 'OpenVPN username', לחצו כאן על אישור.") 'Information' 'OKCancel'
 if ($r -ne 'OK') { exit 1 }
-Start-Process $AccountUrl
+if (-not $env:PROTON_KIT_TEST_NOBROWSER) { Start-Process $AccountUrl }   # (automated tests: no browser)
 
 function Read-FromClipboard([string]$Label, [string]$Prompt) {
     while ($true) {

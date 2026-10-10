@@ -10,6 +10,7 @@ function Test-Wpf {
     if ($script:UiMode) { return $script:UiMode -eq 'wpf' }
     $script:UiMode = 'classic'
     if ($env:PROTON_KIT_CLASSIC) { return $false }                    # for testing the fallback
+    # (screen readers and the UI tests find buttons by their AutomationProperties.Name)
     if ([Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') { return $false }
     try {
         Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
@@ -53,7 +54,7 @@ function Get-Brush([string]$Hex) { (New-Object Windows.Media.BrushConverter).Con
 # The window frame shared by every window; $Body is the XAML of what goes inside.
 function New-UiWindow([string]$Body, [string]$Title = 'Proton VPN', [switch]$Minimize, [switch]$Persistent) {
     $t = Get-UiTheme
-    $minButton = if ($Minimize) { '<Button x:Name="MinBtn" Style="{StaticResource Chrome}" Content="&#xE921;" ToolTip="מזעור"/>' } else { '' }
+    $minButton = if ($Minimize) { '<Button x:Name="MinBtn" Style="{StaticResource Chrome}" Content="&#xE921;" ToolTip="מזעור" AutomationProperties.Name="מזעור"/>' } else { '' }
     $xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -167,7 +168,7 @@ function New-UiWindow([string]$Body, [string]$Title = 'Proton VPN', [switch]$Min
         <TextBlock x:Name="TitleText" Margin="20,0,0,0" VerticalAlignment="Center" FontSize="12" Foreground="{{Sub}}"/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,6,0">
           {{MIN}}
-          <Button x:Name="CloseBtn" Style="{StaticResource Close}" Content="&#xE8BB;" ToolTip="סגירה"/>
+          <Button x:Name="CloseBtn" Style="{StaticResource Close}" Content="&#xE8BB;" ToolTip="סגירה" AutomationProperties.Name="סגירה"/>
         </StackPanel>
       </Grid>
       <Border Padding="26,2,26,24">
@@ -308,7 +309,7 @@ function Show-CountryPickerWpf($Countries, [string]$Current, [string]$Status) {
             $tag = if ($c.Code -eq $Current) { 'current' } else { '' }
             $check = if ($tag) { '<Border DockPanel.Dock="Right" Width="22" Height="22" CornerRadius="11" Background="{{Accent}}" VerticalAlignment="Center"><TextBlock Text="&#x2713;" Foreground="{{OnAccent}}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>' } else { '' }
             @"
-<Button x:Name="c_$($c.Code)" Style="{StaticResource Card}" Tag="$tag" Width="208" Margin="0,0,10,10">
+<Button x:Name="c_$($c.Code)" Style="{StaticResource Card}" Tag="$tag" Width="208" Margin="0,0,10,10" AutomationProperties.Name="$(ConvertTo-XmlText $c.Name)">
   <DockPanel>
     <Border DockPanel.Dock="Left" Margin="0,0,12,0">$(Get-FlagXaml $c.Code 42 28 5)</Border>
     $check

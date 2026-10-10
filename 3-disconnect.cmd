@@ -5,5 +5,7 @@ powershell -NoProfile -WindowStyle Hidden -Command "(New-Object -ComObject WScri
 exit /b
 :kit_ok
 rem Disconnects the VPN and restores normal network settings.
-net session >nul 2>&1 || (powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs" & exit /b)
+rem Not elevated yet: run this file again as admin. The path goes through a variable, since
+rem a quote mark in a folder name (e.g. a Hebrew geresh) broke the quoted command.
+net session >nul 2>&1 || (set "KIT_SELF=%~f0" & powershell -NoProfile -Command "Start-Process -FilePath $env:KIT_SELF -Verb RunAs" & exit /b)
 start "" powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0bin\disconnect.ps1"

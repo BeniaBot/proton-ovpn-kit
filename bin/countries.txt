@@ -1,0 +1,15 @@
+﻿# Proton VPN free servers, by country (taken from Proton's server list on 8.10.2026).
+# One line per country: code | name shown | near/far | server addresses.
+# The first line is the default. The first address in a line is always tried first,
+# the others in random order, so users spread over the servers.
+# Order on screen = order here (measured from Israel: Europe ~65-90 ms, the rest 150-300 ms).
+NL|הולנד|near|190.2.149.6 190.2.149.68 185.107.80.114 169.150.218.70 80.79.6.83 190.2.148.229 185.107.56.130
+CH|שווייץ|near|135.136.39.34 149.88.27.235 138.199.6.179
+PL|פולין|near|217.138.209.18
+NO|נורווגיה|near|95.173.205.166 95.173.205.160 95.173.205.168
+RO|רומניה|near|89.33.8.50 31.14.252.2 146.70.246.130
+CA|קנדה|far|195.242.214.178 149.22.82.55 79.127.254.65 195.242.214.210 195.242.214.162 195.242.214.194
+MX|מקסיקו|far|84.20.27.51 149.102.224.38 84.20.27.53 84.20.27.50
+US|ארצות הברית|far|146.70.230.114 149.22.88.144 149.40.62.119 138.199.35.120 149.22.84.149 89.187.185.161
+SG|סינגפור|far|103.216.221.73 149.50.211.159 103.216.221.69 149.50.211.149
+JP|יפן|far|212.102.51.110 138.199.21.203 149.88.103.33 212.102.51.115 149.88.103.43 149.88.103.53

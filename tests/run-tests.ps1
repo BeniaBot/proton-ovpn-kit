@@ -184,6 +184,13 @@ foreach ($mode in 'wpf', 'classic') {
     Check "${m}drop: password given again" (([regex]::Matches((Read-Text $FakeLog), 'user=')).Count -eq 2)
     Stop-Kit; Check "${m}drop: then disconnects" ($p.WaitForExit(15000))
 
+    # the first server never answers (seen for real on a network that blocks UDP): OpenVPN
+    # restarts towards the next one and must not be left waiting for a hold release
+    $p = Start-Connect 'pollfail' $envMode
+    Check "${m}server does not answer: moves on and connects" ((Wait-For { Has '\[window\] connected' } 40) -and -not (Has '\[message Error\]')) (Read-Text $Transcript)
+    Check "${m}server does not answer: hold turned off before the release" ((Read-Text $FakeLog) -match '(?s)cmd hold off.*cmd hold release')
+    Stop-Kit; Check "${m}server does not answer: then disconnects" ($p.WaitForExit(15000))
+
     # OpenVPN dies while connected
     $p = Start-Connect 'crash' $envMode
     Check "${m}crash: tells the user the VPN is off" ((Wait-For { Has '\[message Error\] ה-VPN התנתק' } 45) -and $p.WaitForExit(15000)) (Read-Text $Transcript)

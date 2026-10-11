@@ -123,7 +123,9 @@ function Start-Vpn {
     $S.Client = $client; $S.Stream = $client.GetStream()
     $S.Writer = New-Object IO.StreamWriter($S.Stream); $S.Writer.NewLine = "`n"; $S.Writer.AutoFlush = $true
     $S.Queue = New-Object Collections.Generic.Queue[string]
-    'state on', 'log on', 'hold release' | ForEach-Object { $S.Queue.Enqueue($_) }
+    # 'hold off' first: while the hold flag is on, every restart (a server that does not answer,
+    # a drop) waits for another release, so OpenVPN never got past the first server.
+    'state on', 'log on', 'hold off', 'hold release' | ForEach-Object { $S.Queue.Enqueue($_) }
     $S.Ready = $false; $S.Waiting = $false; $S.Buf = ''; $S.ExitSeen = $false
     $limit = if ($env:PROTON_KIT_CONNECT_TIMEOUT) { [int]$env:PROTON_KIT_CONNECT_TIMEOUT } else { 150 }   # shorter only in tests
     $S.Phase = 'connecting'; $S.Deadline = (Get-Date).AddSeconds($limit)

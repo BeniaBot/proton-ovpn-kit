@@ -79,6 +79,8 @@ class FakeOpenVpn {
         string line;
         while ((line = r.ReadLine()) != null) {
             Log("cmd " + (line.StartsWith("password") ? "password ..." : line));
+            // the real one writes every command into its --log file, the username too (not the password)
+            if (logArg >= 0) File.AppendAllText(args[logArg + 1], "MANAGEMENT: CMD '" + (line.StartsWith("password") ? "password [...]" : line) + "'\n", new UTF8Encoding(false));
             if (line == "state on") Say("SUCCESS: real-time state notification set to ON");
             else if (line == "log on") Say("SUCCESS: real-time log notification set to ON");
             else if (line == "hold off") { holdFlag = false; Say("SUCCESS: hold flag set to OFF"); }

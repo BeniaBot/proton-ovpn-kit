@@ -170,6 +170,8 @@ foreach ($mode in 'wpf', 'classic') {
     Check "${m}disconnects on request" ($p.WaitForExit(15000))
     Check "${m}leaves nothing behind" (Test-Clean)
     Check "${m}no error shown on a clean stop" (-not (Has '\[message Error\]'))
+    $runLog = Read-Text "$Kit\bin\openvpn-run.log"
+    Check "${m}openvpn-run.log kept, without the username" ((Test-Path -LiteralPath "$Kit\bin\openvpn-run.log") -and $runLog -match 'MANAGEMENT: CMD' -and $runLog -notmatch 'username') $runLog
 
     # wrong credentials
     $p = Start-Connect 'authfail' $envMode

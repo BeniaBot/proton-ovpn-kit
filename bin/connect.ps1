@@ -22,11 +22,21 @@ function Save-OpenVpnLog {
     $S.Log | Where-Object { $_ -notmatch 'username "Auth"' } | Set-Content (Join-Path $Bin 'openvpn-last.log') -Encoding UTF8
 }
 
+# Its own log (openvpn-run.log) has the same line; that file is free only once OpenVPN has exited.
+function Clear-RunLogUsername {
+    $f = Join-Path $Bin 'openvpn-run.log'
+    try {
+        $all = [IO.File]::ReadAllLines($f)
+        $keep = @($all | Where-Object { $_ -notmatch 'username "Auth"' })
+        if ($keep.Count -ne $all.Count) { [IO.File]::WriteAllLines($f, [string[]]$keep) }
+    } catch { }
+}
+
 # Leaves the computer as it was: OpenVPN gone, IPv6 back on, no state files.
 function Complete-Vpn {
     if ($S.Client) { try { $S.Client.Close() } catch { } }
     if ($S.Proc -and -not $S.Proc.HasExited) { Stop-Process -Id $S.Proc.Id -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500 }
-    Save-OpenVpnLog
+    Save-OpenVpnLog; Clear-RunLogUsername
     Remove-Item $ConnectedFile, $StopFile -Force -ErrorAction SilentlyContinue
     Clear-TunnelRoutes    # what a killed OpenVPN could not remove itself
     Restore-Ipv6
@@ -207,7 +217,7 @@ function Read-VpnLine([string]$line) {
 function Complete-Run {
     try { $S.Client.Close() } catch { }
     $S.Client = $null
-    Save-OpenVpnLog
+    Save-OpenVpnLog; Clear-RunLogUsername
     Remove-Item $ConnectedFile -Force -ErrorAction SilentlyContinue
     if ($S.Stopping -in 'switch', 'retry') {
         if ($S.Stopping -eq 'switch') { $S.RouteFails = 0 }
